@@ -1,0 +1,53 @@
+version: "3.8"
+
+services:
+  karyasetu-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: karyasetu-marketplace-core
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+      - SESSION_SECRET=ks_live_secure_jwt_session_secret_production_2026_super_key
+      - RAZORPAY_KEY_ID=rzp_live_placeholder
+      - RAZORPAY_KEY_SECRET=rzp_secret_placeholder
+      - CASHFREE_APP_ID=cf_app_placeholder
+      - CASHFREE_SECRET_KEY=cf_secret_placeholder
+      - DLT_SMS_API_KEY=dlt_key_placeholder
+    volumes:
+      - karyasetu_data:/app/.data
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: karyasetu-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: karyasetu
+      POSTGRES_PASSWORD: karyasetu_secure_password_2026
+      POSTGRES_DB: karyasetu_db
+    volumes:
+      - karyasetu_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U karyasetu -d karyasetu_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  karyasetu_data:
+    driver: local
+  karyasetu_pgdata:
+    driver: local

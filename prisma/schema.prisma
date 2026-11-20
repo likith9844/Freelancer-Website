@@ -1,0 +1,562 @@
+// Prisma Schema for KaryaSetu (Freelancing For India)
+// Supports portable local development via SQLite / PostgreSQL in production
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// ----------------------------------------------------
+// 1. IDENTITY & RBAC
+// ----------------------------------------------------
+
+model User {
+  id                    String        @id @default(uuid())
+  email                 String        @unique
+  phone                 String?       @unique
+  passwordHash          String
+  fullName              String
+  isEmailVerified       Boolean       @default(false)
+  isPhoneVerified       Boolean       @default(false)
+  twoFactorSecret       String?
+  isTwoFactorEnabled    Boolean       @default(false)
+  status                String        @default("ACTIVE") // ACTIVE, SUSPENDED, PENDING_VERIFICATION, FLAGGED
+  suspensionReason      String?
+  failedLoginAttempts   Int           @default(0)
+  lockoutUntil          DateTime?
+  lastLoginAt           DateTime?
+  lastLoginIp           String?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  // Relationships
+  userRoles             UserRole[]
+  sessions              Session[]
+  loginHistory          LoginHistory[]
+  freelancerProfile     FreelancerProfile?
+  clientProfile         ClientProfile?
+  messagesSent          Message[]
+  auditLogs             AuditLog[]
+  reviewsAuthored       Review[]      @relation("ReviewsAuthored")
+  reviewsReceived       Review[]      @relation("ReviewsReceived")
+  disputesInitiated     Dispute[]     @relation("DisputesInitiated")
+}
+
+model Role {
+  id                    String        @id @default(uuid())
+  name                  String        @unique // SUPER_ADMIN, ADMIN, FINANCE_ADMIN, SUPPORT_ADMIN, MODERATOR, CLIENT, FREELANCER
+  displayName           String
+  description           String?
+  isSystemRole          Boolean       @default(false)
+  createdAt             DateTime      @default(now())
+
+  userRoles             UserRole[]
+  rolePermissions       RolePermission[]
+}
+
+model Permission {
+  id                    String        @id @default(uuid())
+  key                   String        @unique // e.g. users.view, payments.manage, etc.
+  name                  String
+  module                String
+  description           String?
+
+  rolePermissions       RolePermission[]
+}
+
+model RolePermission {
+  roleId                String
+  permissionId          String
+  role                  Role          @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission            Permission    @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model UserRole {
+  userId                String
+  roleId                String
+  assignedAt            DateTime      @default(now())
+  user                  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role                  Role          @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+}
+
+model Session {
+  id                    String        @id @default(uuid())
+  userId                String
+  tokenHash             String        @unique
+  ipAddress             String
+  userAgent             String?
+  expiresAt             DateTime
+  createdAt             DateTime      @default(now())
+
+  user                  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model LoginHistory {
+  id                    String        @id @default(uuid())
+  userId                String?
+  emailAttempted        String
+  ipAddress             String
+  userAgent             String?
+  status                String        // SUCCESS, INVALID_CREDENTIALS, LOCKED_OUT, 2FA_FAILED
+  failureReason         String?
+  createdAt             DateTime      @default(now())
+
+  user                  User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
+
+// ----------------------------------------------------
+// 2. PROFILES & KYC
+// ----------------------------------------------------
+
+model FreelancerProfile {
+  id                    String        @id @default(uuid())
+  userId                String        @unique
+  professionalTitle     String
+  bio                   String
+  avatarUrl             String?
+  hourlyRateINR         Float         @default(1500)
+  experienceYears       Float         @default(2.0)
+  availabilityStatus    String        @default("AVAILABLE")
+  city                  String        @default("Bengaluru")
+  state                 String        @default("Karnataka")
+  pincode               String        @default("560103")
+  kycStatus             String        @default("PENDING") // PENDING, SUBMITTED, UNDER_REVIEW, APPROVED, REJECTED
+  isVerifiedBadge       Boolean       @default(false)
+  isTopRated            Boolean       @default(false)
+  totalEarningsINR      Float         @default(0.0)
+  withdrawableBalanceINR Float        @default(0.0)
+  pendingClearanceINR   Float         @default(0.0)
+  completedProjectsCount Int          @default(0)
+  ratingAverage         Float         @default(0.0)
+  ratingCount           Int           @default(0)
+  onTimeDeliveryRate    Float         @default(100.0)
+  adminNotes            String?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  user                  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skills                FreelancerSkill[]
+  bankAccounts          BankAccount[]
+  proposals             Proposal[]
+  contracts             Contract[]
+  settlements           Settlement[]
+  withdrawals           Withdrawal[]
+}
+
+model ClientProfile {
+  id                    String        @id @default(uuid())
+  userId                String        @unique
+  clientType            String        @default("INDIVIDUAL") // INDIVIDUAL, PROPRIETORSHIP, LLP, PVT_LTD, ENTERPRISE
+  companyName           String?
+  companyLogoUrl        String?
+  companyWebsite        String?
+  gstin                 String?       // Indian GSTIN e.g. 29ABCDE1234F1Z5
+  panNumber             String?
+  billingAddress        String?
+  city                  String        @default("Bengaluru")
+  state                 String        @default("Karnataka")
+  pincode               String        @default("560103")
+  isGstVerified         Boolean       @default(false)
+  isVerifiedBadge       Boolean       @default(false)
+  totalSpentINR         Float         @default(0.0)
+  projectsPostedCount   Int           @default(0)
+  projectsHiredCount    Int           @default(0)
+  ratingAverage         Float         @default(0.0)
+  ratingCount           Int           @default(0)
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  user                  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projects              Project[]
+  contracts             Contract[]
+  payments              Payment[]
+}
+
+model Category {
+  id                    String        @id @default(uuid())
+  name                  String        @unique
+  slug                  String        @unique
+  description           String?
+  iconName              String?
+  sortOrder             Int           @default(0)
+  isActive              Boolean       @default(true)
+
+  skills                Skill[]
+  projects              Project[]
+}
+
+model Skill {
+  id                    String        @id @default(uuid())
+  categoryId            String?
+  name                  String        @unique
+  slug                  String        @unique
+  category              Category?     @relation(fields: [categoryId], references: [id])
+  freelancers           FreelancerSkill[]
+  projects              ProjectSkill[]
+}
+
+model FreelancerSkill {
+  freelancerId          String
+  skillId               String
+  freelancer            FreelancerProfile @relation(fields: [freelancerId], references: [id], onDelete: Cascade)
+  skill                 Skill             @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@id([freelancerId, skillId])
+}
+
+model BankAccount {
+  id                    String        @id @default(uuid())
+  freelancerId          String
+  accountHolderName     String
+  accountNumberMasked   String        // e.g. XXXXXX5678
+  accountNumberEncrypted String
+  ifscCode              String
+  bankName              String
+  upiVpa                String?
+  isPrimary             Boolean       @default(true)
+  verificationStatus    String        @default("PENDING") // PENDING, PENNY_DROP_VERIFIED, FAILED
+  pennyDropNameScore    Float?
+  createdAt             DateTime      @default(now())
+
+  freelancer            FreelancerProfile @relation(fields: [freelancerId], references: [id], onDelete: Cascade)
+  withdrawals           Withdrawal[]
+}
+
+// ----------------------------------------------------
+// 3. PROJECTS, PROPOSALS & CONTRACTS
+// ----------------------------------------------------
+
+model Project {
+  id                    String        @id @default(uuid())
+  clientId              String
+  categoryId            String
+  title                 String
+  slug                  String        @unique
+  description           String
+  budgetType            String        @default("FIXED") // FIXED, HOURLY
+  minBudgetINR          Float
+  maxBudgetINR          Float
+  estimatedDuration     String
+  experienceLevel       String        @default("INTERMEDIATE")
+  visibility            String        @default("PUBLIC")
+  status                String        @default("PUBLISHED") // DRAFT, PUBLISHED, IN_PROGRESS, COMPLETED, CANCELLED
+  proposalsCount        Int           @default(0)
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  client                ClientProfile @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  category              Category      @relation(fields: [categoryId], references: [id])
+  skills                ProjectSkill[]
+  proposals             Proposal[]
+  contract              Contract?
+}
+
+model ProjectSkill {
+  projectId             String
+  skillId               String
+  project               Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  skill                 Skill         @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, skillId])
+}
+
+model Proposal {
+  id                    String        @id @default(uuid())
+  projectId             String
+  freelancerId          String
+  bidAmountINR          Float
+  estimatedDurationDays Int
+  coverLetter           String
+  status                String        @default("SUBMITTED") // SUBMITTED, SHORTLISTED, ACCEPTED, REJECTED, WITHDRAWN
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  project               Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  freelancer            FreelancerProfile @relation(fields: [freelancerId], references: [id], onDelete: Cascade)
+  milestones            ProposalMilestone[]
+  contract              Contract?
+
+  @@unique([projectId, freelancerId])
+}
+
+model ProposalMilestone {
+  id                    String        @id @default(uuid())
+  proposalId            String
+  title                 String
+  description           String?
+  amountINR             Float
+  durationDays          Int
+  sortOrder             Int           @default(1)
+
+  proposal              Proposal      @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+}
+
+model Contract {
+  id                    String        @id @default(uuid())
+  contractNumber        String        @unique // e.g. "KS-CTR-2026-001"
+  projectId             String        @unique
+  proposalId            String        @unique
+  clientId              String
+  freelancerId          String
+  totalValueINR         Float
+  clientServiceFeeRate  Float         @default(0.03) // 3%
+  freelancerFeeRate     Float         @default(0.10) // 10%
+  termsAndConditions    String
+  clientSignedAt        DateTime?
+  freelancerSignedAt    DateTime?
+  status                String        @default("ACTIVE") // PENDING_SIGNATURES, ACTIVE, COMPLETED, DISPUTED, CANCELLED
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  project               Project       @relation(fields: [projectId], references: [id])
+  proposal              Proposal      @relation(fields: [proposalId], references: [id])
+  client                ClientProfile @relation(fields: [clientId], references: [id])
+  freelancer            FreelancerProfile @relation(fields: [freelancerId], references: [id])
+  milestones            Milestone[]
+  workspace             Workspace?
+  reviews               Review[]
+}
+
+model Milestone {
+  id                    String        @id @default(uuid())
+  contractId            String
+  title                 String
+  description           String?
+  amountINR             Float
+  sortOrder             Int           @default(1)
+  status                String        @default("DRAFT") // DRAFT, FUNDED, IN_PROGRESS, SUBMITTED, APPROVED, RELEASED, REFUNDED, DISPUTED
+  fundedAt              DateTime?
+  submittedAt           DateTime?
+  approvedAt            DateTime?
+  releasedAt            DateTime?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  contract              Contract      @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  deliverables          MilestoneDeliverable[]
+  payments              Payment[]
+  commissions           Commission?
+  settlement            Settlement?
+  disputes              Dispute[]
+}
+
+model MilestoneDeliverable {
+  id                    String        @id @default(uuid())
+  milestoneId           String
+  freelancerNotes       String
+  demoUrl               String?
+  fileUrls              String        @default("[]") // JSON string
+  clientFeedback        String?
+  status                String        @default("SUBMITTED") // SUBMITTED, REVISION_REQUESTED, APPROVED
+  createdAt             DateTime      @default(now())
+
+  milestone             Milestone     @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+}
+
+// ----------------------------------------------------
+// 4. WORKSPACES & MESSAGING
+// ----------------------------------------------------
+
+model Workspace {
+  id                    String        @id @default(uuid())
+  contractId            String        @unique
+  title                 String
+  status                String        @default("ACTIVE")
+  createdAt             DateTime      @default(now())
+
+  contract              Contract      @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  messages              Message[]
+}
+
+model Message {
+  id                    String        @id @default(uuid())
+  workspaceId           String
+  senderUserId          String
+  content               String
+  isSystemMessage       Boolean       @default(false)
+  isRead                Boolean       @default(false)
+  createdAt             DateTime      @default(now())
+
+  workspace             Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  sender                User          @relation(fields: [senderUserId], references: [id])
+}
+
+// ----------------------------------------------------
+// 5. FINANCIAL CORE, COMMISSIONS & LEDGER
+// ----------------------------------------------------
+
+model Payment {
+  id                    String        @id @default(uuid())
+  paymentReference      String        @unique // e.g. "KS-PAY-2026-001"
+  milestoneId           String
+  clientId              String
+  providerName          String        @default("MOCK") // MOCK, RAZORPAY_ROUTE, CASHFREE
+  gatewayOrderId        String
+  gatewayPaymentId      String?
+  gatewaySignature      String?
+  amountINR             Float
+  currency              String        @default("INR")
+  paymentMethod         String?       // UPI, CARD, NETBANKING
+  status                String        @default("INITIATED") // INITIATED, CAPTURED, FAILED, REFUNDED
+  idempotencyKey        String        @unique
+  failureReason         String?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  milestone             Milestone     @relation(fields: [milestoneId], references: [id])
+  client                ClientProfile @relation(fields: [clientId], references: [id])
+}
+
+model PaymentEvent {
+  id                    String        @id @default(uuid())
+  providerName          String
+  providerEventId       String        @unique
+  eventType             String
+  payload               String        // JSON string
+  isProcessed           Boolean       @default(false)
+  processedAt           DateTime?
+  createdAt             DateTime      @default(now())
+}
+
+model Commission {
+  id                    String        @id @default(uuid())
+  milestoneId           String        @unique
+  grossMilestoneINR     Float
+  clientServiceFeeINR   Float
+  freelancerCommissionINR Float
+  gstOnClientFeeINR     Float
+  gstOnCommissionINR    Float
+  tds194oINR            Float
+  netFreelancerINR      Float
+  totalClientChargedINR Float
+  createdAt             DateTime      @default(now())
+
+  milestone             Milestone     @relation(fields: [milestoneId], references: [id])
+}
+
+model LedgerAccount {
+  id                    String        @id @default(uuid())
+  accountCode           String        @unique // e.g. 1010-GATEWAY-CLEARING, 2010-CLIENT-ESCROW, 4010-REVENUE-COMMISSION
+  accountName           String
+  accountType           String        // ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE
+  createdAt             DateTime      @default(now())
+
+  entries               LedgerEntry[]
+}
+
+model LedgerEntry {
+  id                    String        @id @default(uuid())
+  transactionGroupId    String        // Groups balanced legs of single financial event
+  accountId             String
+  direction             String        // DEBIT, CREDIT
+  amountINR             Float
+  currency              String        @default("INR")
+  referenceType         String        // ESCROW_FUNDING, MILESTONE_RELEASE, PAYOUT, REFUND
+  description           String
+  createdAt             DateTime      @default(now())
+
+  account               LedgerAccount @relation(fields: [accountId], references: [id])
+}
+
+model Settlement {
+  id                    String        @id @default(uuid())
+  settlementReference   String        @unique
+  milestoneId           String        @unique
+  freelancerId          String
+  grossAmountINR        Float
+  deductionsINR         Float
+  netSettledINR         Float
+  status                String        @default("CLEARED") // PENDING, CLEARED, SETTLED
+  createdAt             DateTime      @default(now())
+
+  milestone             Milestone     @relation(fields: [milestoneId], references: [id])
+  freelancer            FreelancerProfile @relation(fields: [freelancerId], references: [id])
+}
+
+model Withdrawal {
+  id                    String        @id @default(uuid())
+  withdrawalReference   String        @unique
+  freelancerId          String
+  bankAccountId         String
+  amountINR             Float
+  payoutMode            String        @default("IMPS") // IMPS, NEFT, UPI
+  status                String        @default("REQUESTED") // REQUESTED, PROCESSING, COMPLETED, FAILED, REJECTED
+  utrNumber             String?
+  createdAt             DateTime      @default(now())
+  processedAt           DateTime?
+
+  freelancer            FreelancerProfile @relation(fields: [freelancerId], references: [id])
+  bankAccount           BankAccount   @relation(fields: [bankAccountId], references: [id])
+}
+
+model Dispute {
+  id                    String        @id @default(uuid())
+  disputeNumber         String        @unique
+  milestoneId           String
+  contractId            String
+  openedByUserId        String
+  reasonCode            String
+  statement             String
+  disputedAmountINR     Float
+  status                String        @default("OPEN") // OPEN, EVIDENCE_REVIEW, RESOLVED, DISMISSED
+  resolutionType        String?       // FULL_RELEASE, FULL_REFUND, SPLIT
+  freelancerAwardedINR  Float?
+  clientAwardedINR      Float?
+  arbitrationNotes      String?
+  createdAt             DateTime      @default(now())
+  resolvedAt            DateTime?
+
+  milestone             Milestone     @relation(fields: [milestoneId], references: [id])
+  openedByUser          User          @relation("DisputesInitiated", fields: [openedByUserId], references: [id])
+}
+
+model Review {
+  id                    String        @id @default(uuid())
+  contractId            String
+  reviewerUserId        String
+  revieweeUserId        String
+  overallRating         Int           // 1 to 5
+  reviewTitle           String?
+  reviewBody            String
+  createdAt             DateTime      @default(now())
+
+  contract              Contract      @relation(fields: [contractId], references: [id])
+  reviewer              User          @relation("ReviewsAuthored", fields: [reviewerUserId], references: [id])
+  reviewee              User          @relation("ReviewsReceived", fields: [revieweeUserId], references: [id])
+
+  @@unique([contractId, reviewerUserId])
+}
+
+model AuditLog {
+  id                    String        @id @default(uuid())
+  actorUserId           String?
+  actorEmail            String?
+  actorIp               String
+  action                String        // USER_SUSPENDED, COMMISSION_CHANGED, PAYOUT_APPROVED
+  entityType            String        // USER, PAYMENT, SETTLEMENT, DISPUTE
+  entityId              String
+  oldState              String?       // JSON string
+  newState              String?       // JSON string
+  reason                String?
+  createdAt             DateTime      @default(now())
+
+  actor                 User?         @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+}
+
+model SystemSetting {
+  id                    String        @id @default(uuid())
+  category              String        // GENERAL, MARKETPLACE, PAYMENTS, TAX, SECURITY
+  settingKey            String        @unique
+  settingValue          String        // JSON string
+  description           String?
+  isPublic              Boolean       @default(false)
+  updatedAt             DateTime      @updatedAt
+}

@@ -1,0 +1,41 @@
+{
+  "name": "freelancer",
+  "version": "1.0.0",
+  "description": "[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/) [![Next.js](https://img.shields.io/badge/Next.js-14+-black.svg)](https://nextjs.org/) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue.svg)](https://www.postgresql.org/) [![Prisma](https://img.shields.io/badge/Prisma-ORM-darkblue.svg)](https://www.prisma.io/) [![Tailwind CSS](https://img.shields.io/badge/Tailwind-CSS-38B2AC.svg)](https://tailwindcss.com/) [![Compliance](https://img.shields.io/badge/Compliance-RBI%20Escrow%20%7C%20GST%20TCS%20%7C%20TDS%20194--O-green.svg)](https://incometaxindia.gov.in/)",
+  "main": "index.js",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "test": "tsx src/tests/e2e-hire-to-payout.test.ts",
+    "test:all": "tsx src/tests/auth-and-rbac.test.ts && tsx src/tests/kyc-and-profile.test.ts && tsx src/tests/projects-and-proposals.test.ts && tsx src/tests/contracts-and-workspace.test.ts && tsx src/tests/payments-and-ledger.test.ts && tsx src/tests/settlements-and-disputes.test.ts && tsx src/tests/admin-control-center.test.ts && tsx src/tests/notifications.test.ts && tsx src/tests/analytics-and-reconciliation.test.ts && tsx src/tests/e2e-hire-to-payout.test.ts && tsx src/tests/razorpay-route-and-admin-management.test.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@prisma/client": "^7.10.0",
+    "@types/bcryptjs": "^2.4.6",
+    "bcryptjs": "^3.0.3",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.55.0",
+    "next": "^14.2.35",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tailwind-merge": "^3.7.0",
+    "zod": "^4.6.6"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "autoprefixer": "^10.6.1",
+    "postcss": "^8.5.29",
+    "tailwindcss": "^3.4.19",
+    "tsx": "^4.23.15",
+    "typescript": "^5.4.5"
+  }
+}
